@@ -26,7 +26,7 @@ from utils.torch_utils import select_device, load_classifier, time_sync
 from djitellopy import Tello
 from roi1 import follow
 
-@torch.no_grad()
+
 
 
 graph = {
@@ -103,12 +103,11 @@ def check_rotate(path):
         print("see left")
 
 
-def check_crosswalk(path):
+def check_crosswalk(path, image):
     if path == "B > D" or path == "F > H":
 
-        image = frame_read.frame
         image = cv2.resize(image, (640, 640))
-        cv2.imwrite("C:/Users/eee85/Desktop/testing.jpg", image)
+        cv2.imwrite("testing.jpg", image)
         x = crosswalk(image)
         if x == 'no cross':
             print("no cross")
@@ -156,6 +155,7 @@ def dijkstra(graph, start, end):
 
 ##########################################################################################################
 
+@torch.no_grad()
 
 def yellow_hsv(image):
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -274,22 +274,22 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
     tello.takeoff()
     tello.move_up(50)
     frame_read = tello.get_frame_read()
-
+    myFrame = frame_read.frame
 ######################################################################### TK
     for i in range(len(path)-1):
 
         print(path[i] + ' > ' + path[i + 1] + "  ||  " + str(graph[path[i]][path[i + 1]]))
         check_rotate(str(path[i]) + ' > ' + str(path[i + 1]))
-        check_crosswalk(str(path[i]) + ' > ' + str(path[i + 1]))
+        check_crosswalk(str(path[i]) + ' > ' + str(path[i + 1]), myFrame)
 
         t_move = int(graph[path[i]][path[i + 1]]) #가야할 거리
         c_move = 0  #현재 거리
         while t_move <= c_move:
 ##########################################################################
 
-            myFrame = frame_read.frame
-            img_cv = copy.deepcopy(myFrame)
 
+            img_cv = copy.deepcopy(myFrame)
+            myFrame = frame_read.frame
             myFrame = Image.fromarray(myFrame)
             image = copy.deepcopy(myFrame)
             image = image.resize((640, 640))
