@@ -26,9 +26,6 @@ from utils.torch_utils import select_device, load_classifier, time_sync
 from djitellopy import Tello
 from roi1 import follow
 
-
-
-
 graph = {
     'A': {'B': 110},
     'B': {'A': 110, 'C': 50, 'D': 30},
@@ -49,6 +46,7 @@ import cv2
 import numpy as np
 
 tello = Tello()
+
 
 ########################################################################################################## TK
 
@@ -156,13 +154,13 @@ def dijkstra(graph, start, end):
 ##########################################################################################################
 
 @torch.no_grad()
-
 def yellow_hsv(image):
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     lower_yellow = np.array([12, 75, 160])
     upper_yellow = np.array([56, 255, 255])
     img_th = cv2.inRange(image_hsv, lower_yellow, upper_yellow)
     return img_th
+
 
 def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         # source=None,  # file/dir/URL/glob, 0 for webcam
@@ -190,21 +188,18 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         half=False,  # use FP16 half-precision inference
         source=None
         ):
-
     webcam = False
-###################################################################################################### TK
+    ###################################################################################################### TK
     path = list(reversed(dijkstra(graph, "A", "F")))
     print(path)
     print()
 
-#######################################################################################################
+    #######################################################################################################
     tello = Tello()
     tello.connect()
 
     tello.streamoff()
     tello.streamon()
-
-
 
     tello.for_back_velocity = 0
     tello.left_right_velocity = 0
@@ -263,7 +258,7 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
     ascii = is_ascii(names)  # names are ascii (use PIL for UTF-8)
 
     #############################################################################################
-    #여기서 부터 프레임 받아서 처리
+    # 여기서 부터 프레임 받아서 처리
 
     # 이미지 전처리 -> 한번만 정의 후 프레임에 대해서 전처리
     transform = transforms.Compose([
@@ -275,18 +270,20 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
     tello.move_up(50)
     frame_read = tello.get_frame_read()
     myFrame = frame_read.frame
-######################################################################### TK
-    for i in range(len(path)-1):
+    ######################################################################### TK
+    for i in range(len(path) - 1):
 
         print(path[i] + ' > ' + path[i + 1] + "  ||  " + str(graph[path[i]][path[i + 1]]))
         check_rotate(str(path[i]) + ' > ' + str(path[i + 1]))
         check_crosswalk(str(path[i]) + ' > ' + str(path[i + 1]), myFrame)
 
-        t_move = int(graph[path[i]][path[i + 1]]) #가야할 거리
-        c_move = 0  #현재 거리
-        while t_move <= c_move:
-##########################################################################
+        t_move = int(graph[path[i]][path[i + 1]])
+        print(t_move, "만큼 가야해!!!!!")# 가야할 거리
+        c_move = 0  # 현재 거리
 
+        while t_move <= c_move:
+            print(c_move,"까지 왔어!!!!")
+            ##########################################################################
 
             img_cv = copy.deepcopy(myFrame)
             myFrame = frame_read.frame
@@ -298,14 +295,11 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
             # 필요함 그냥 넣으셈
             myFrame = torch.unsqueeze(myFrame, 0)
 
-
-
             dataset = myFrame  # 수정
             bs = 1  # batch_size
             vid_path, vid_writer = [None] * bs, [None] * bs
             dataset = dataset.to(device)
             pred = model(dataset)[0]
-
 
             # NMS
             pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
@@ -330,20 +324,18 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
 
                 print(f'ymin_x1 = {ymin_x1} , ymax_x1 = {ymax_x1}')
 
-
-
             #########################################################3
 
             if bbox[0].size() == torch.Size([0, 6]):
-                result = image #원본 사진
+                result = image  # 원본 사진
                 print('can not find')
             else:
                 # print(bbox[0][0])
                 bbox1 = bbox[0][0].cpu().numpy()
-                #print(int(bbox[0])) #-> 532 픽셀좌표로 뜬다 확인함.
+                # print(int(bbox[0])) #-> 532 픽셀좌표로 뜬다 확인함.
                 image_draw.rectangle(((bbox1[0], bbox1[1]), (bbox1[2], bbox1[3])), outline=(0, 0, 255), width=4)
-                result = image #상자 그려진 사진
-                dir_1 = follow( bbox1[0] , bbox1[1],bbox1[2],bbox1[3])
+                result = image  # 상자 그려진 사진
+                dir_1 = follow(bbox1[0], bbox1[1], bbox1[2], bbox1[3])
                 # print('dir_check')
 
                 if dir_1 == 1:
@@ -387,23 +379,16 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
             cv2.line(result, (ycenter_x1 - 30, ymin_y1), (ycenter_x1 - 30, ymax_y1), (255, 0, 0), 5, cv2.LINE_AA)
             cv2.line(result, (ycenter_x1 + 30, ymin_y1), (ycenter_x1 + 30, ymax_y1), (255, 0, 0), 5, cv2.LINE_AA)
 
-            #격자 생성
+            # 격자 생성
             cv2.line(result, (int(200), 0), (int(200), 640), (255, 255, 0), 3)
             cv2.line(result, (int(440), 0), (int(440), 640), (255, 255, 0), 3)
             cv2.circle(result, (int(640 / 2), int(640 / 2)), 5, (0, 0, 255), 5)
             cv2.line(result, (0, int(200)), (640, int(200)), (255, 255, 0), 3)
             cv2.line(result, (0, int(440)), (640, int(440)), (255, 255, 0), 3)
 
-
             # cv2.line(result, (320,320), ((bbox1[0] + bbox1[2]) / 2),((bbox1[1] + bbox1[3]) / 2), (0, 0, 255), 3)
             # 실시간으로 받아오게끔
             cv2.imshow('1', result)
-
-
-
-
-
-
 
     # return pred
 
@@ -447,6 +432,5 @@ def main(opt):
 
 
 if __name__ == "__main__":
-
     opt = parse_opt()
     main(opt)
