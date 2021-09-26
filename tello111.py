@@ -27,8 +27,8 @@ from djitellopy import Tello
 from roi1 import follow
 
 graph = {
-    'A': {'B': 110},
-    'B': {'A': 110, 'C': 50, 'D': 30},
+    'A': {'B': 100},
+    'B': {'A': 100, 'C': 50, 'D': 30},
     'C': {'B': 50},
     'D': {'B': 30, 'E': 50, 'F': 110},
     'E': {'D': 50},
