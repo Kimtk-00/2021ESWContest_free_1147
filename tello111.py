@@ -79,10 +79,10 @@ def crosswalk(image):
             cv2.rectangle(img_thresh, pt1=(x, y), pt2=(x + w, y + h), color=(255, 255, 255), thickness=2)
             xw += (x + (w // 2))
             cnt += 1
-    cv2.imshow("test", img_thresh)
-    cv2.imshow("original", image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    #cv2.imshow("test", img_thresh)
+    #cv2.imshow("original", image)
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
     if cnt == 0:
         cv2.imwrite("test_cross.jpg", img_thresh)
         return "no cross"
@@ -281,13 +281,17 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         print(t_move, "만큼 가야해!!!!!")# 가야할 거리
         c_move = 0  # 현재 거리
 
-        while t_move <= c_move:
+        while t_move >= c_move:
             print(c_move,"까지 왔어!!!!")
             ##########################################################################
+            myFrame = frame_read.frame
+
 
             img_cv = copy.deepcopy(myFrame)
-            myFrame = frame_read.frame
+            img_cv = cv2.resize(img_cv, dsize=(640, 640))
+
             myFrame = Image.fromarray(myFrame)
+
             image = copy.deepcopy(myFrame)
             image = image.resize((640, 640))
             # preprocessing input Image
@@ -361,15 +365,15 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
 
             ##########################################################
 
-            if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
-                print('no color')
-            else:
-                if (ycenter_x1 + 50 < int((bbox1[0] + bbox1[2]) / 2)):
-                    print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
-                elif (ycenter_x1 - 50 > int((bbox1[0] + bbox1[2]) / 2)):
-                    print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
+                if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
+                    print('no color')
                 else:
-                    print("안정적으로 보행 중입니다.")
+                    if (ycenter_x1 + 50 < int((bbox1[0] + bbox1[2]) / 2)):
+                        print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
+                    elif (ycenter_x1 - 50 > int((bbox1[0] + bbox1[2]) / 2)):
+                        print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
+                    else:
+                        print("안정적으로 보행 중입니다.")
 
             ########################################################
 
