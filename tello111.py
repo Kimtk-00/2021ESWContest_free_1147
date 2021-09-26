@@ -1,53 +1,3 @@
-'''
-import cv2
-import time
-from djitellopy import Tello
-import numpy as np
-
-width = 1280  # WIDTH OF THE IMAGE
-height = 720  # HEIGHT OF THE IMAGE
-deadZone = 100
-
-startCounter = 0
-
-# CONNECT TO TELLO
-me = Tello()
-me.connect()
-
-
-me.streamoff()
-me.streamon()
-
-
-img_counter = 0
-frame_set = []
-start_time = time.time()
-while True:
-
-
-    frame_read = me.get_frame_read()
-    myFrame = frame_read.frame
-    img = cv2.resize(myFrame, (width, height))
-
-    capture = cv2.VideoCapture(0)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-    if time.time() - start_time >= 3: #<---- Check if 5 sec passed
-        img_name = "opencv_frame_{}.png".format(img_counter)
-        cv2.imwrite(img_name, myFrame)
-        print("{} written!".format(img_counter))
-        start_time = time.time()
-'''
-
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
-"""
-Run inference on images, videos, directories, streams, etc.
-
-Usage:
-    $ python path/to/detect.py --source path/to/img.jpg --weights yolov5s.pt --img 640
-"""
-
 import argparse
 import sys
 from pathlib import Path
@@ -63,8 +13,6 @@ from PIL import ImageDraw
 import copy
 from matplotlib.pyplot import imshow
 
-"from djitellopy import Tello"
-
 FILE = Path(__file__).resolve()
 sys.path.append(FILE.parents[0].as_posix())  # add yolov5/ to path
 
@@ -78,21 +26,136 @@ from utils.torch_utils import select_device, load_classifier, time_sync
 from djitellopy import Tello
 from roi1 import follow
 
-# CONNECT TO TELLO
-# me = Tello()
-# me.connect()
-#
-# me.streamoff()
-# me.streamon()
-
-# tello_vedio = cv2.VideoCapture('udp://0.0.0.0:11111')
-# ret, frame = tello_vedio.read()
-
-
-# frame_read = me.get_frame_read()
-# myFrame = frame_read.frame
-
 @torch.no_grad()
+
+
+graph = {
+    'A': {'B': 110},
+    'B': {'A': 110, 'C': 50, 'D': 30},
+    'C': {'B': 50},
+    'D': {'B': 30, 'E': 50, 'F': 110},
+    'E': {'D': 50},
+    'F': {'D': 110, 'G': 40, 'H': 100},
+    'G': {'F': 40},
+    'H': {'F': 100, 'I': 40, 'J': 240},
+    'I': {'H': 40},
+    'J': {'H': 240}
+}
+
+import heapq
+from djitellopy import Tello
+import time
+import cv2
+import numpy as np
+
+tello = Tello()
+
+########################################################################################################## TK
+
+
+def crosswalk(image):
+    xw = yw = cnt = 0
+    lower_white = np.array([0, 0, 245])
+    upper_white = np.array([180, 255, 255])
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    mask_white = cv2.inRange(image, lower_white, upper_white)
+    img_result2 = cv2.bitwise_and(image, image, mask=mask_white)
+    img_white_gray = img_result2[:, :, 2]
+    img_blur = cv2.GaussianBlur(img_white_gray, ksize=(5, 5), sigmaX=0)
+    img_thresh = cv2.adaptiveThreshold(
+        img_blur, maxValue=255.0, adaptiveMethod=cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        thresholdType=cv2.THRESH_BINARY_INV, blockSize=19, C=9)
+    contours, _ = cv2.findContours(
+        img_thresh,
+        mode=cv2.RETR_EXTERNAL,
+        method=cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    for contour in contours:
+        img_thresh = cv2.drawContours(img_thresh, contour, -1, (255, 255, 255), 2)
+        x, y, w, h = cv2.boundingRect(contour)
+        image = cv2.drawContours(image, contour, -1, (255, 255, 255), 2)
+        x, y, w, h = cv2.boundingRect(contour)
+        print(x, y, w, h)
+        if w in range(80, 150) and h in range(20, 70):
+            cv2.rectangle(img_thresh, pt1=(x, y), pt2=(x + w, y + h), color=(255, 255, 255), thickness=2)
+            xw += (x + (w // 2))
+            cnt += 1
+    cv2.imshow("test", img_thresh)
+    cv2.imshow("original", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    if cnt == 0:
+        cv2.imwrite("test_cross.jpg", img_thresh)
+        return "no cross"
+    else:
+        cv2.imwrite("test_cross.jpg", img_thresh)
+        return xw // cnt
+
+
+def check_rotate(path):
+    if path == "B > C" or path == "D > E" or path == "H > I":
+        tello.rotate_clockwise(90)
+        print("see right")
+
+    elif path == "F > H" or path == "H > J":
+        tello.rotate_counter_clockwise(90)
+        print("see left")
+
+
+def check_crosswalk(path):
+    if path == "B > D" or path == "F > H":
+
+        image = frame_read.frame
+        image = cv2.resize(image, (640, 640))
+        cv2.imwrite("C:/Users/eee85/Desktop/testing.jpg", image)
+        x = crosswalk(image)
+        if x == 'no cross':
+            print("no cross")
+        elif x > 320:
+            leng = (x - 320) // 5
+
+            if leng < 5:
+                print("cross crosswalk")
+            else:
+                print("go right %dcm" % leng)
+
+        elif x < 320:
+            leng = (320 - x) // 5
+
+            if leng < 5:
+                print("cross crosswalk")
+            else:
+                print("go left %dcm" % leng)
+
+
+def dijkstra(graph, start, end):
+    d = {vertex: [float('inf'), start] for vertex in graph}
+    d[start] = [0, start]
+    queue = []
+    heapq.heappush(queue, [d[start][0], start])
+
+    while queue:
+        current_d, current_vertex = heapq.heappop(queue)
+        if d[current_vertex][0] < current_d:
+            continue
+        for adjacent, weight in graph[current_vertex].items():
+            dis = current_d + weight
+            if dis < d[adjacent][0]:
+                d[adjacent] = [dis, current_vertex]
+                heapq.heappush(queue, [dis, adjacent])
+
+    path = end
+    path_output = list(end)
+    while d[path][1] != start:
+        path_output.append(d[path][1])
+        path = d[path][1]
+    path_output.append(start)
+    return path_output
+
+
+##########################################################################################################
+
 
 def yellow_hsv(image):
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -129,19 +192,24 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         ):
 
     webcam = False
+###################################################################################################### TK
+    path = list(reversed(dijkstra(graph, "A", "F")))
+    print(path)
+    print()
 
-    me = Tello()
-    me.connect()
+#######################################################################################################
+    tello = Tello()
+    tello.connect()
 
-    me.streamoff()
-    me.streamon()
+    tello.streamoff()
+    tello.streamon()
 
 
 
-    me.for_back_velocity = 0
-    me.left_right_velocity = 0
-    me.up_down_velocity = 0
-    me.yaw_velocity = 0  # 기울기
+    tello.for_back_velocity = 0
+    tello.left_right_velocity = 0
+    tello.up_down_velocity = 0
+    tello.yaw_velocity = 0  # 기울기
 
     # Directories
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
@@ -203,117 +271,133 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         transforms.ToTensor()
     ])
 
-    me.takeoff()
-    me.move_up(50)
+    tello.takeoff()
+    tello.move_up(50)
+    frame_read = tello.get_frame_read()
 
-    while True:
-        frame_read = me.get_frame_read()
-        myFrame = frame_read.frame
-        img_cv = copy.deepcopy(myFrame)
+######################################################################### TK
+    for i in range(len(path)-1):
 
-        myFrame = Image.fromarray(myFrame)
-        image = copy.deepcopy(myFrame)
-        image = image.resize((640, 640))
-        # preprocessing input Image
-        myFrame = transform(myFrame)
-        # 필요함 그냥 넣으셈
-        myFrame = torch.unsqueeze(myFrame, 0)
+        print(path[i] + ' > ' + path[i + 1] + "  ||  " + str(graph[path[i]][path[i + 1]]))
+        check_rotate(str(path[i]) + ' > ' + str(path[i + 1]))
+        check_crosswalk(str(path[i]) + ' > ' + str(path[i + 1]))
 
+        t_move = int(graph[path[i]][path[i + 1]]) #가야할 거리
+        c_move = 0  #현재 거리
+        while t_move <= c_move:
+##########################################################################
 
+            myFrame = frame_read.frame
+            img_cv = copy.deepcopy(myFrame)
 
-        dataset = myFrame  # 수정
-        bs = 1  # batch_size
-        vid_path, vid_writer = [None] * bs, [None] * bs
-        dataset = dataset.to(device)
-        pred = model(dataset)[0]
-
-
-        # NMS
-        pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-
-        bbox = pred
-        image_draw = ImageDraw.Draw(image, mode="RGB")
-        bbox[0] = bbox[0].cpu()
-
-        ###################################################################
-        bi_yellow = yellow_hsv(img_cv)
-        yvalue_th = np.where(bi_yellow[:, :] == 255)
-        if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
-            print("no color")
-        else:
-            ymin_x1 = np.min(yvalue_th[1])
-            ymax_x1 = np.max(yvalue_th[1])
-
-            ycenter_x1 = int((ymin_x1 + ymax_x1) / 2)
-
-            print(f'ymin_x1 = {ymin_x1} , ymax_x1 = {ymax_x1}')
+            myFrame = Image.fromarray(myFrame)
+            image = copy.deepcopy(myFrame)
+            image = image.resize((640, 640))
+            # preprocessing input Image
+            myFrame = transform(myFrame)
+            # 필요함 그냥 넣으셈
+            myFrame = torch.unsqueeze(myFrame, 0)
 
 
 
-        #########################################################3
+            dataset = myFrame  # 수정
+            bs = 1  # batch_size
+            vid_path, vid_writer = [None] * bs, [None] * bs
+            dataset = dataset.to(device)
+            pred = model(dataset)[0]
 
-        if bbox[0].size() == torch.Size([0, 6]):
-            result = image #원본 사진
-            print('can not find')
-        else:
-            # print(bbox[0][0])
-            bbox1 = bbox[0][0].cpu().numpy()
-            #print(int(bbox[0])) #-> 532 픽셀좌표로 뜬다 확인함.
-            image_draw.rectangle(((bbox1[0], bbox1[1]), (bbox1[2], bbox1[3])), outline=(0, 0, 255), width=4)
-            result = image #상자 그려진 사진
-            dir_1 = follow( bbox1[0] , bbox1[1],bbox1[2],bbox1[3])
-            # print('dir_check')
 
-            if dir_1 == 1:
-                me.move_left(20)
-                print('go left')
-            elif dir_1 == 2:
-                me.move_right(20)
-                print('go right ')
-            elif dir_1 == 3:
-                me.move_back(20)
-                print('go back')
-            elif dir_1 == 4:
-                me.move_forward(20)
-                print('go forward')
+            # NMS
+            pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+
+            bbox = pred
+            image_draw = ImageDraw.Draw(image, mode="RGB")
+            bbox[0] = bbox[0].cpu()
+
+            ###################################################################
+            bi_yellow = yellow_hsv(img_cv)
+            yvalue_th = np.where(bi_yellow[:, :] == 255)
+            if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
+                print("no color")
             else:
-                print('stay')
+                ymin_x1 = np.min(yvalue_th[1])
+                ymax_x1 = np.max(yvalue_th[1])
+                ymin_y1 = np.min(yvalue_th[0])
+                ymax_y1 = np.max(yvalue_th[0])
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                me.land()
-                print('land')
+                ycenter_x1 = int((ymin_x1 + ymax_x1) / 2)
+                ycenter_y1 = int((ymin_y1 + ymax_y1) / 2)
 
-        ##########################################################
+                print(f'ymin_x1 = {ymin_x1} , ymax_x1 = {ymax_x1}')
 
-        if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
-            print('no color')
-        else:
-            if (ycenter_x1 + 50 < int((bbox1[0] + bbox1[2]) / 2)):
-                print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
-            elif (ycenter_x1 - 50 > int((bbox1[0] + bbox1[2]) / 2)):
-                print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
+
+
+            #########################################################3
+
+            if bbox[0].size() == torch.Size([0, 6]):
+                result = image #원본 사진
+                print('can not find')
             else:
-                print("안정적으로 보행 중입니다.")
+                # print(bbox[0][0])
+                bbox1 = bbox[0][0].cpu().numpy()
+                #print(int(bbox[0])) #-> 532 픽셀좌표로 뜬다 확인함.
+                image_draw.rectangle(((bbox1[0], bbox1[1]), (bbox1[2], bbox1[3])), outline=(0, 0, 255), width=4)
+                result = image #상자 그려진 사진
+                dir_1 = follow( bbox1[0] , bbox1[1],bbox1[2],bbox1[3])
+                # print('dir_check')
 
-        ########################################################
+                if dir_1 == 1:
+                    tello.move_left(20)
+                    print('go left')
+                elif dir_1 == 2:
+                    tello.move_right(20)
+                    print('go right ')
+                elif dir_1 == 3:
+                    tello.move_back(20)
+                    print('go back')
+                    c_move -= 20
+                elif dir_1 == 4:
+                    tello.move_forward(20)
+                    print('go forward')
+                    c_move += 20
+                else:
+                    print('stay')
 
-        result = np.asarray(result)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    tello.land()
+                    print('land')
 
-        # 중점 라인
-        cv2.line(result, (ycenter_x1 - 30, ymin_y1), (ycenter_x1 - 30, ymax_y1), (255, 0, 0), 5, cv2.LINE_AA)
-        cv2.line(result, (ycenter_x1 + 30, ymin_y1), (ycenter_x1 + 30, ymax_y1), (255, 0, 0), 5, cv2.LINE_AA)
+            ##########################################################
 
-        #격자 생성
-        cv2.line(result, (int(200), 0), (int(200), 640), (255, 255, 0), 3)
-        cv2.line(result, (int(440), 0), (int(440), 640), (255, 255, 0), 3)
-        cv2.circle(result, (int(640 / 2), int(640 / 2)), 5, (0, 0, 255), 5)
-        cv2.line(result, (0, int(200)), (640, int(200)), (255, 255, 0), 3)
-        cv2.line(result, (0, int(440)), (640, int(440)), (255, 255, 0), 3)
+            if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
+                print('no color')
+            else:
+                if (ycenter_x1 + 50 < int((bbox1[0] + bbox1[2]) / 2)):
+                    print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
+                elif (ycenter_x1 - 50 > int((bbox1[0] + bbox1[2]) / 2)):
+                    print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
+                else:
+                    print("안정적으로 보행 중입니다.")
+
+            ########################################################
+
+            result = np.asarray(result)
+
+            # 중점 라인
+            cv2.line(result, (ycenter_x1 - 30, ymin_y1), (ycenter_x1 - 30, ymax_y1), (255, 0, 0), 5, cv2.LINE_AA)
+            cv2.line(result, (ycenter_x1 + 30, ymin_y1), (ycenter_x1 + 30, ymax_y1), (255, 0, 0), 5, cv2.LINE_AA)
+
+            #격자 생성
+            cv2.line(result, (int(200), 0), (int(200), 640), (255, 255, 0), 3)
+            cv2.line(result, (int(440), 0), (int(440), 640), (255, 255, 0), 3)
+            cv2.circle(result, (int(640 / 2), int(640 / 2)), 5, (0, 0, 255), 5)
+            cv2.line(result, (0, int(200)), (640, int(200)), (255, 255, 0), 3)
+            cv2.line(result, (0, int(440)), (640, int(440)), (255, 255, 0), 3)
 
 
-        # cv2.line(result, (320,320), ((bbox1[0] + bbox1[2]) / 2),((bbox1[1] + bbox1[3]) / 2), (0, 0, 255), 3)
-        # 실시간으로 받아오게끔
-        cv2.imshow('1', result)
+            # cv2.line(result, (320,320), ((bbox1[0] + bbox1[2]) / 2),((bbox1[1] + bbox1[3]) / 2), (0, 0, 255), 3)
+            # 실시간으로 받아오게끔
+            cv2.imshow('1', result)
 
 
 

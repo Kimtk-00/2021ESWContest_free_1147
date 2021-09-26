@@ -36,7 +36,7 @@ def crosswalk(image):
         mode=cv2.RETR_EXTERNAL,
         method=cv2.CHAIN_APPROX_SIMPLE
     )
-    
+
 
     for contour in contours:
         img_thresh = cv2.drawContours(img_thresh, contour, -1, (255,255,255), 2)
@@ -53,10 +53,10 @@ def crosswalk(image):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     if cnt == 0:
-        cv2.imwrite("C:/Users/eee85/Desktop/test_cross.jpg", img_thresh)
+        cv2.imwrite("test_cross.jpg", img_thresh)
         return "no cross"
     else:
-        cv2.imwrite("C:/Users/eee85/Desktop/test_cross.jpg", img_thresh)
+        cv2.imwrite("test_cross.jpg", img_thresh)
         return xw//cnt
 
 def check_rotate(path):
@@ -69,9 +69,9 @@ def check_rotate(path):
         print("see left")
 
 def check_crosswalk(path):
-    
+
     if path == "B > D" or path == "F > H":
-        
+
         image = frame_read.frame
         image = cv2.resize(image, (640, 640))
         cv2.imwrite("C:/Users/eee85/Desktop/testing.jpg", image)
@@ -80,7 +80,7 @@ def check_crosswalk(path):
             print("no cross")
         elif x > 320:
             leng = (x - 320) // 5
-            
+
             if leng < 5:
                 print("cross crosswalk")
             else:
@@ -88,7 +88,7 @@ def check_crosswalk(path):
 
         elif x < 320:
             leng = (320 - x) // 5
-            
+
             if leng < 5:
                 print("cross crosswalk")
             else:
@@ -112,7 +112,7 @@ def dijkstra(graph, start, end):
             if dis < d[adjacent][0]:
                 d[adjacent] = [dis, current_vertex]
                 heapq.heappush(queue, [dis, adjacent])
-    
+
     path = end
     path_output = list(end)
     while d[path][1] != start:
@@ -140,7 +140,9 @@ for i in range(len(path)-1):
     print(path[i] + ' > ' + path[i+1] + "  ||  " + str(graph[path[i]][path[i+1]]))
     check_rotate(str(path[i]) + ' > ' + str(path[i+1]))
     check_crosswalk(str(path[i]) + ' > ' + str(path[i+1]))
-    
+
+
+
     tello.move_forward(int(graph[path[i]][path[i+1]]))
 
     time.sleep(1)
