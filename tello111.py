@@ -28,9 +28,9 @@ from roi1 import follow
 
 graph = {
     'A': {'B': 100},
-    'B': {'A': 100, 'C': 50, 'D': 30},
+    'B': {'A': 100, 'C': 50, 'D': 40},
     'C': {'B': 50},
-    'D': {'B': 30, 'E': 50, 'F': 110},
+    'D': {'B': 40, 'E': 50, 'F': 110},
     'E': {'D': 50},
     'F': {'D': 110, 'G': 40, 'H': 100},
     'G': {'F': 40},
@@ -161,6 +161,21 @@ def yellow_hsv(image):
     img_th = cv2.inRange(image_hsv, lower_yellow, upper_yellow)
     return img_th
 
+def blue_hsv(image):
+    image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    lower_blue = np.array([100, 100, 120])
+    upper_blue = np.array([150, 255, 255])
+    img_th = cv2.inRange(image_hsv, lower_blue, upper_blue)
+    return img_th
+
+def green_hsv(image):
+    image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    lower_green = np.array([69, 29, 103])
+    upper_green = np.array([96, 233, 255])
+    img_th = cv2.inRange(image_hsv, lower_green, upper_green)
+    return img_th
+
+
 
 def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         # source=None,  # file/dir/URL/glob, 0 for webcam
@@ -190,7 +205,7 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         ):
     webcam = False
     ###################################################################################################### TK
-    path = list(reversed(dijkstra(graph, "A", "F")))
+    path = list(reversed(dijkstra(graph, "A", "J"))) ##목적지
     print(path)
     print()
 
@@ -273,6 +288,8 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
     ######################################################################### TK
     for i in range(len(path) - 1):
 
+        myFrame = frame_read.frame
+
         print(path[i] + ' > ' + path[i + 1] + "  ||  " + str(graph[path[i]][path[i + 1]]))
         check_rotate(str(path[i]) + ' > ' + str(path[i + 1]))
         check_crosswalk(str(path[i]) + ' > ' + str(path[i + 1]), myFrame)
@@ -281,7 +298,8 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         print(t_move, "만큼 가야해!!!!!")# 가야할 거리
         c_move = 0  # 현재 거리
 
-        while t_move >= c_move:
+        while t_move > c_move:
+            print("===========================================================")
             print(c_move,"까지 왔어!!!!")
             ##########################################################################
             myFrame = frame_read.frame
@@ -313,6 +331,7 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
             bbox[0] = bbox[0].cpu()
 
             ###################################################################
+
             bi_yellow = yellow_hsv(img_cv)
             yvalue_th = np.where(bi_yellow[:, :] == 255)
             if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
@@ -327,6 +346,7 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
                 ycenter_y1 = int((ymin_y1 + ymax_y1) / 2)
 
                 print(f'ymin_x1 = {ymin_x1} , ymax_x1 = {ymax_x1}')
+
 
             #########################################################3
 
@@ -344,20 +364,20 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
 
                 if dir_1 == 1:
                     tello.move_left(20)
-                    print('go left')
+
                 elif dir_1 == 2:
                     tello.move_right(20)
-                    print('go right ')
+
                 elif dir_1 == 3:
                     tello.move_back(20)
-                    print('go back')
+
                     c_move -= 20
                 elif dir_1 == 4:
                     tello.move_forward(20)
-                    print('go forward')
+
                     c_move += 20
                 else:
-                    print('stay')
+                    pass
 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     tello.land()
@@ -368,14 +388,51 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
                 if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
                     print('no color')
                 else:
-                    if (ycenter_x1 + 50 < int((bbox1[0] + bbox1[2]) / 2)):
+                    if (ycenter_x1 + 70 < int((bbox1[0] + bbox1[2]) / 2)):
                         print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
-                    elif (ycenter_x1 - 50 > int((bbox1[0] + bbox1[2]) / 2)):
+                    elif (ycenter_x1 - 70 > int((bbox1[0] + bbox1[2]) / 2)):
                         print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
                     else:
                         print("안정적으로 보행 중입니다.")
 
             ########################################################
+            ## 장애물 피하고 중점다시 잡기
+            bi_blue = blue_hsv(img_cv)
+            bi_green = green_hsv(img_cv)
+            bvalue_th = np.where(bi_blue[:, :] == 255)
+            gvalue_th = np.where(bi_green[:,:] == 255)
+
+
+
+            if (np.sum(bvalue_th[0]) == 0 or np.sum(gvalue_th[0]) == 0 ):
+                print("no obj")
+            else:
+                print('장애물 감지됨.')
+                bmin_x1 = np.min(bvalue_th[1])
+                bmax_x1 = np.max(bvalue_th[1])
+                bmin_y1 = np.min(bvalue_th[0])
+                bmax_y1 = np.max(bvalue_th[0])
+
+                bcenter_x1 = int((bmin_x1 + bmax_x1) / 2)
+                bcenter_y1 = int((bmin_y1 + bmax_y1) / 2)
+
+                gmin_x1 = np.min(gvalue_th[1])
+                gmax_x1 = np.max(gvalue_th[1])
+                gmin_y1 = np.min(gvalue_th[0])
+                gmax_y1 = np.max(gvalue_th[0])
+
+                gcenter_x1 = int((gmin_x1 + gmax_x1) / 2)
+                gcenter_y1 = int((gmin_y1 + gmax_y1) / 2)
+
+                if bmin_y1 > bbox1[1] or gmin_y1 > bbox1[1]:
+                    if bcenter_x1 < ycenter_x1 or gcenter_x1 < ycenter_x1:
+                        print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
+                    elif bcenter_x1 > ycenter_x1 or gcenter_x1 > ycenter_x1:
+                        print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
+                else:
+                    print('장애물 뒤에있음 신경 안써도됨.')
+
+            #############################################################3
 
             result = np.asarray(result)
 
@@ -393,6 +450,7 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
             # cv2.line(result, (320,320), ((bbox1[0] + bbox1[2]) / 2),((bbox1[1] + bbox1[3]) / 2), (0, 0, 255), 3)
             # 실시간으로 받아오게끔
             cv2.imshow('1', result)
+            print("===========================================================")
 
     # return pred
 
