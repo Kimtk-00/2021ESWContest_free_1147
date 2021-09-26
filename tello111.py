@@ -331,11 +331,16 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
             bbox[0] = bbox[0].cpu()
 
             ###################################################################
-
+            #노란색 라인 탐색
             bi_yellow = yellow_hsv(img_cv)
+            bi_green = green_hsv(img_cv)
+            bi_blue = blue_hsv(img_cv)
+
+            bvalue_th = np.where(bi_blue[:, :] == 255)
+            gvalue_th = np.where(bi_green[:, :] == 255)
             yvalue_th = np.where(bi_yellow[:, :] == 255)
             if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
-                print("no color")
+                print("노란색 안보임.")
             else:
                 ymin_x1 = np.min(yvalue_th[1])
                 ymax_x1 = np.max(yvalue_th[1])
@@ -345,14 +350,13 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
                 ycenter_x1 = int((ymin_x1 + ymax_x1) / 2)
                 ycenter_y1 = int((ymin_y1 + ymax_y1) / 2)
 
-                print(f'ymin_x1 = {ymin_x1} , ymax_x1 = {ymax_x1}')
-
+                # print(f'ymin_x1 = {ymin_x1} , ymax_x1 = {ymax_x1}')
 
             #########################################################3
 
             if bbox[0].size() == torch.Size([0, 6]):
                 result = image  # 원본 사진
-                print('can not find')
+                print('보행자 안보임.')
             else:
                 # print(bbox[0][0])
                 bbox1 = bbox[0][0].cpu().numpy()
@@ -370,12 +374,12 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
 
                 elif dir_1 == 3:
                     tello.move_back(20)
-
                     c_move -= 20
+
                 elif dir_1 == 4:
                     tello.move_forward(20)
-
                     c_move += 20
+
                 else:
                     pass
 
@@ -386,28 +390,63 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
             ##########################################################
 
                 if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
-                    print('no color')
+                    print('노란색 라인 안보임.')
                 else:
-                    if (ycenter_x1 + 70 < int((bbox1[0] + bbox1[2]) / 2)):
-                        print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
-                    elif (ycenter_x1 - 70 > int((bbox1[0] + bbox1[2]) / 2)):
+                    if (np.sum(bvalue_th[0]) != 0 or np.sum(gvalue_th[0]) != 0):
+                        pass
+                    elif (ycenter_x1 - 60 > int((bbox1[0] + bbox1[2]) / 2)):
                         print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
+                    elif (ycenter_x1 + 60 < int((bbox1[0] + bbox1[2]) / 2)):
+                        print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
                     else:
                         print("안정적으로 보행 중입니다.")
 
             ########################################################
             ## 장애물 피하고 중점다시 잡기
-            bi_blue = blue_hsv(img_cv)
-            bi_green = green_hsv(img_cv)
-            bvalue_th = np.where(bi_blue[:, :] == 255)
-            gvalue_th = np.where(bi_green[:,:] == 255)
+            if (np.sum(bvalue_th[0]) == 0 and np.sum(gvalue_th[0]) == 0 ):
+                print("장애물 안보임.")
+
+            elif(np.sum(bvalue_th[0]) != 0 and np.sum(gvalue_th[0]) == 0 ):
+                print('ob1 검출됨.')
+                bmin_x1 = np.min(bvalue_th[1])
+                bmax_x1 = np.max(bvalue_th[1])
+                bmin_y1 = np.min(bvalue_th[0])
+                bmax_y1 = np.max(bvalue_th[0])
+
+                bcenter_x1 = int((bmin_x1 + bmax_x1) / 2)
+                bcenter_y1 = int((bmin_y1 + bmax_y1) / 2)
+
+                if (bmin_y1 > bbox1[1]):
+                    if (bcenter_x1 < ycenter_x1 ):
+                        print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
+                    elif (bcenter_x1 > ycenter_x1 ):
+                        print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
+                else:
+                    print('장애물 뒤에있음 신경 안써도됨.')
 
 
+            elif(np.sum(bvalue_th[0]) == 0 and np.sum(gvalue_th[0]) != 0 ):
+                print('ob2 검출됨')
+                gmin_x1 = np.min(gvalue_th[1])
+                gmax_x1 = np.max(gvalue_th[1])
+                gmin_y1 = np.min(gvalue_th[0])
+                gmax_y1 = np.max(gvalue_th[0])
 
-            if (np.sum(bvalue_th[0]) == 0 or np.sum(gvalue_th[0]) == 0 ):
-                print("no obj")
+                gcenter_x1 = int((gmin_x1 + gmax_x1) / 2)
+                gcenter_y1 = int((gmin_y1 + gmax_y1) / 2)
+
+
+                if (gmin_y1 > bbox1[1]):
+                    if (gcenter_x1 < ycenter_x1):
+                        print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
+                    elif (gcenter_x1 > ycenter_x1):
+                        print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
+                else:
+                    print('장애물 뒤에있음 신경 안써도됨.')
+
+
             else:
-                print('장애물 감지됨.')
+                print('ob1 ob2 검출됨')
                 bmin_x1 = np.min(bvalue_th[1])
                 bmax_x1 = np.max(bvalue_th[1])
                 bmin_y1 = np.min(bvalue_th[0])
@@ -423,11 +462,10 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
 
                 gcenter_x1 = int((gmin_x1 + gmax_x1) / 2)
                 gcenter_y1 = int((gmin_y1 + gmax_y1) / 2)
-
-                if bmin_y1 > bbox1[1] or gmin_y1 > bbox1[1]:
-                    if bcenter_x1 < ycenter_x1 or gcenter_x1 < ycenter_x1:
+                if (bmin_y1 > bbox1[1] or gmin_y1 > bbox1[1]):
+                    if (bcenter_x1 < ycenter_x1 or gcenter_x1 < ycenter_x1):
                         print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
-                    elif bcenter_x1 > ycenter_x1 or gcenter_x1 > ycenter_x1:
+                    elif (bcenter_x1 > ycenter_x1 or gcenter_x1 > ycenter_x1):
                         print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
                 else:
                     print('장애물 뒤에있음 신경 안써도됨.')
