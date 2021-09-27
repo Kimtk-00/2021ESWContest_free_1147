@@ -46,7 +46,7 @@ import cv2
 import numpy as np
 
 tello = Tello()
-
+i = 0
 
 ########################################################################################################## TK
 
@@ -79,10 +79,10 @@ def crosswalk(image):
             cv2.rectangle(img_thresh, pt1=(x, y), pt2=(x + w, y + h), color=(255, 255, 255), thickness=2)
             xw += (x + (w // 2))
             cnt += 1
-    #cv2.imshow("test", img_thresh)
-    #cv2.imshow("original", image)
-    #cv2.waitKey(0)
-    #cv2.destroyAllWindows()
+    # cv2.imshow("test", img_thresh)
+    # cv2.imshow("original", image)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     if cnt == 0:
         cv2.imwrite("test_cross.jpg", img_thresh)
         return "no cross"
@@ -161,12 +161,6 @@ def yellow_hsv(image):
     img_th = cv2.inRange(image_hsv, lower_yellow, upper_yellow)
     return img_th
 
-def blue_hsv(image):
-    image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    lower_blue = np.array([100, 100, 120])
-    upper_blue = np.array([150, 255, 255])
-    img_th = cv2.inRange(image_hsv, lower_blue, upper_blue)
-    return img_th
 
 def green_hsv(image):
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -174,7 +168,6 @@ def green_hsv(image):
     upper_green = np.array([96, 233, 255])
     img_th = cv2.inRange(image_hsv, lower_green, upper_green)
     return img_th
-
 
 
 def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
@@ -205,7 +198,7 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         ):
     webcam = False
     ###################################################################################################### TK
-    path = list(reversed(dijkstra(graph, "A", "J"))) ##목적지
+    path = list(reversed(dijkstra(graph, "A", "J")))  ##목적지
     print(path)
     print()
 
@@ -295,15 +288,22 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
         check_crosswalk(str(path[i]) + ' > ' + str(path[i + 1]), myFrame)
 
         t_move = int(graph[path[i]][path[i + 1]])
-        print(t_move, "만큼 가야해!!!!!")# 가야할 거리
+        print(t_move, "만큼 가야해!!!!!")  # 가야할 거리
         c_move = 0  # 현재 거리
 
         while t_move > c_move:
             print("===========================================================")
-            print(c_move,"까지 왔어!!!!")
+            print(c_move, "까지 왔어!!!!")
             ##########################################################################
             myFrame = frame_read.frame
 
+            ''' 화질개선 필요시 필터 적용
+            frame = cv2.medianBlur(frame, 3)
+            frame = cv2.GaussianBlur(frame, (5, 5), 0)
+            kernel = np.ones((5, 5), np.uint8)
+            frame = cv2.morphologyEx(frame, cv2.MORPH_CLOSE, kernel)
+            frame = cv2.dilate(frame, kernel, iterations=1)
+            '''
 
             img_cv = copy.deepcopy(myFrame)
             img_cv = cv2.resize(img_cv, dsize=(640, 640))
@@ -331,12 +331,10 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
             bbox[0] = bbox[0].cpu()
 
             ###################################################################
-            #노란색 라인 탐색
+            # 노란색 라인 탐색
             bi_yellow = yellow_hsv(img_cv)
             bi_green = green_hsv(img_cv)
-            bi_blue = blue_hsv(img_cv)
 
-            bvalue_th = np.where(bi_blue[:, :] == 255)
             gvalue_th = np.where(bi_green[:, :] == 255)
             yvalue_th = np.where(bi_yellow[:, :] == 255)
             if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
@@ -357,14 +355,56 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
             if bbox[0].size() == torch.Size([0, 6]):
                 result = image  # 원본 사진
                 print('보행자 안보임.')
-            else:
-                # print(bbox[0][0])
-                bbox1 = bbox[0][0].cpu().numpy()
-                # print(int(bbox[0])) #-> 532 픽셀좌표로 뜬다 확인함.
-                image_draw.rectangle(((bbox1[0], bbox1[1]), (bbox1[2], bbox1[3])), outline=(0, 0, 255), width=4)
-                result = image  # 상자 그려진 사진
-                dir_1 = follow(bbox1[0], bbox1[1], bbox1[2], bbox1[3])
-                # print('dir_check')
+            else: #무조건 뭐든 잡았음
+                if(len(bbox[0]) == 1 ): # 1개 인식함.
+                    bbox1 = bbox[0][0].cpu().numpy()
+                    image_draw.rectangle(((bbox1[0], bbox1[1]), (bbox1[2], bbox1[3])), outline=(0, 0, 255), width=4)
+                    result = image
+                    print(bbox1[5])
+                    if(int(bbox1[5] == 0) ): #그게 로봇이야 -> iou 판단
+                        dir_1 = follow(bbox1[0], bbox1[1], bbox1[2], bbox1[3])
+                        i = 1
+                    else:
+                        print('보행자 안보임 , 장애물 검출')
+
+                elif(len(bbox[0]) == 2 ): #2개 검출
+                    bbox1 = bbox[0][0].cpu().numpy()
+                    bbox2 = bbox[0][1].cpu().numpy()
+                    image_draw.rectangle(((bbox1[0], bbox1[1]), (bbox1[2], bbox1[3])), outline=(0, 0, 255), width=4)
+                    image_draw.rectangle(((bbox2[0], bbox2[1]), (bbox2[2], bbox2[3])), outline=(0, 0, 255), width=4)
+                    result = image  # 상자 그려진 사진
+
+                    if(int(bbox1[5]) == 0): #2개중 첫번째 박스가 로봇일 시
+                        dir_1 = follow(bbox1[0], bbox1[1], bbox1[2], bbox1[3])
+                        i = 1
+                    elif(int(bbox2[5]) == 0): #두번째 박스가 로봇일시
+                        dir_1 = follow(bbox2[0], bbox2[1], bbox2[2], bbox2[3])
+                        i = 2
+                    else:
+                        print("보행자 없음")
+
+                elif (len(bbox[0]) == 3):
+                    bbox1 = bbox[0][0].cpu().numpy()
+                    bbox2 = bbox[0][1].cpu().numpy()
+                    bbox3 = bbox[0][2].cpu().numpy()
+                    image_draw.rectangle(((bbox1[0], bbox1[1]), (bbox1[2], bbox1[3])), outline=(0, 0, 255), width=4)
+                    image_draw.rectangle(((bbox2[0], bbox2[1]), (bbox2[2], bbox2[3])), outline=(0, 0, 255), width=4)
+                    image_draw.rectangle(((bbox3[0], bbox3[1]), (bbox3[2], bbox3[3])), outline=(0, 0, 255), width=4)
+
+                    result = image  # 상자 그려진 사진
+
+                    if (bbox1[5] == 0):
+                        dir_1 = follow(bbox1[0], bbox1[1], bbox1[2], bbox1[3])
+                        i = 1
+                    elif(bbox2[5] == 0 ):
+                        dir_1 = follow(bbox2[0], bbox2[1], bbox2[2], bbox2[3])
+                        i = 2
+                    elif(bbox3[5] == 0 ):
+                        dir_1 = follow(bbox3[0], bbox3[1], bbox3[2], bbox3[3])
+                        i = 3
+                    else:
+                        print("보행자 없음 ")
+
 
                 if dir_1 == 1:
                     tello.move_left(20)
@@ -387,88 +427,61 @@ def run(weights='last.pt',  # model.pt path(s)   'yolov5s.pt'
                     tello.land()
                     print('land')
 
-            ##########################################################
-
-                if (np.sum(yvalue_th[0]) == 0 or np.sum(yvalue_th[1]) == 0):
+                ##########################################################
+                #중점잡고 로봇 좌우 기울어짐 판단
+                if (np.sum(yvalue_th[0]) == 0):
                     print('노란색 라인 안보임.')
                 else:
-                    if (np.sum(bvalue_th[0]) != 0 or np.sum(gvalue_th[0]) != 0):
-                        pass
-                    elif (ycenter_x1 - 60 > int((bbox1[0] + bbox1[2]) / 2)):
-                        print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
-                    elif (ycenter_x1 + 60 < int((bbox1[0] + bbox1[2]) / 2)):
-                        print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
-                    else:
-                        print("안정적으로 보행 중입니다.")
+                    if(i == 1):
+                        if (ycenter_x1 - 60 > int((bbox1[0] + bbox1[2]) / 2)):
+                            print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
+                        elif (ycenter_x1 + 60 < int((bbox1[0] + bbox1[2]) / 2)):
+                            print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
+                        else:
+                            print("안정적으로 보행 중입니다.")
+                    elif(i==2):
+                        if (ycenter_x1 - 60 > int((bbox2[0] + bbox2[2]) / 2)):
+                            print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
+                        elif (ycenter_x1 + 60 < int((bbox2[0] + bbox2[2]) / 2)):
+                            print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
+                        else:
+                            print("안정적으로 보행 중입니다.")
+                    elif(i==3):
+                        if (ycenter_x1 - 60 > int((bbox3[0] + bbox3[2]) / 2)):
+                            print("왼쪽으로 기울어짐 오른쪽으로 이동하세요.")
+                        elif (ycenter_x1 + 60 < int((bbox3[0] + bbox3[2]) / 2)):
+                            print("오른쪽으로 기울어짐 왼쪽으로 이동하세요.")
+                        else:
+                            print("안정적으로 보행 중입니다.")
 
             ########################################################
-            ## 장애물 피하고 중점다시 잡기
-            if (np.sum(bvalue_th[0]) == 0 and np.sum(gvalue_th[0]) == 0 ):
-                print("장애물 안보임.")
-
-            elif(np.sum(bvalue_th[0]) != 0 and np.sum(gvalue_th[0]) == 0 ):
-                print('ob1 검출됨.')
-                bmin_x1 = np.min(bvalue_th[1])
-                bmax_x1 = np.max(bvalue_th[1])
-                bmin_y1 = np.min(bvalue_th[0])
-                bmax_y1 = np.max(bvalue_th[0])
-
-                bcenter_x1 = int((bmin_x1 + bmax_x1) / 2)
-                bcenter_y1 = int((bmin_y1 + bmax_y1) / 2)
-
-                if (bmin_y1 > bbox1[1]):
-                    if (bcenter_x1 < ycenter_x1 ):
-                        print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
-                    elif (bcenter_x1 > ycenter_x1 ):
-                        print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
-                else:
-                    print('장애물 뒤에있음 신경 안써도됨.')
+            ## 장애물 피하고 중점다시 잡기  머라도 잡았다가 기본 조건
+            if (len(bbox[0]) == 2):
+                print('장애물 검출됨.')
+                if(i==1):
+                    if (bbox2[1] > bbox1[1]): #bbox2 가 장애물이고 bbox1은 로봇
+                        if (bbox2[0] < ycenter_x1):
+                            print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
+                        elif (bbox2[0] > ycenter_x1):
+                            print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
+                    else:
+                        print('장애물 뒤에있음 신경 안써도됨.')
+                elif(i==2):
+                    if (bbox1[1] > bbox2[1]): #bbox1 이 장애물이고 bbox2는 로봇
+                        if (bbox1[0] < ycenter_x1):
+                            print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
+                        elif (bbox1[0] > ycenter_x1):
+                            print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
+                    else:
+                        print('장애물 뒤에있음 신경 안써도됨.')
 
 
-            elif(np.sum(bvalue_th[0]) == 0 and np.sum(gvalue_th[0]) != 0 ):
-                print('ob2 검출됨')
-                gmin_x1 = np.min(gvalue_th[1])
-                gmax_x1 = np.max(gvalue_th[1])
-                gmin_y1 = np.min(gvalue_th[0])
-                gmax_y1 = np.max(gvalue_th[0])
 
-                gcenter_x1 = int((gmin_x1 + gmax_x1) / 2)
-                gcenter_y1 = int((gmin_y1 + gmax_y1) / 2)
+            # elif(i==1):
+            #     if (len(bbox[0]) == 1):
+            #         print("장애물 안보임.") #로봇만 보인거
 
 
-                if (gmin_y1 > bbox1[1]):
-                    if (gcenter_x1 < ycenter_x1):
-                        print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
-                    elif (gcenter_x1 > ycenter_x1):
-                        print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
-                else:
-                    print('장애물 뒤에있음 신경 안써도됨.')
-
-
-            else:
-                print('ob1 ob2 검출됨')
-                bmin_x1 = np.min(bvalue_th[1])
-                bmax_x1 = np.max(bvalue_th[1])
-                bmin_y1 = np.min(bvalue_th[0])
-                bmax_y1 = np.max(bvalue_th[0])
-
-                bcenter_x1 = int((bmin_x1 + bmax_x1) / 2)
-                bcenter_y1 = int((bmin_y1 + bmax_y1) / 2)
-
-                gmin_x1 = np.min(gvalue_th[1])
-                gmax_x1 = np.max(gvalue_th[1])
-                gmin_y1 = np.min(gvalue_th[0])
-                gmax_y1 = np.max(gvalue_th[0])
-
-                gcenter_x1 = int((gmin_x1 + gmax_x1) / 2)
-                gcenter_y1 = int((gmin_y1 + gmax_y1) / 2)
-                if (bmin_y1 > bbox1[1] or gmin_y1 > bbox1[1]):
-                    if (bcenter_x1 < ycenter_x1 or gcenter_x1 < ycenter_x1):
-                        print('장애물 왼쪽에 있음 오른쪽으로 이동하세요.')
-                    elif (bcenter_x1 > ycenter_x1 or gcenter_x1 > ycenter_x1):
-                        print('장애물 오른쪽에 있음 왼쪽으로 이동하세요.')
-                else:
-                    print('장애물 뒤에있음 신경 안써도됨.')
 
             #############################################################3
 
